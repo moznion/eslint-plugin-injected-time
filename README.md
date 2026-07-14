@@ -1,6 +1,6 @@
-# eslint-plugin-injected-time
+# @moznion/eslint-plugin-injected-time
 
-[![CI](https://github.com/moznion/no-date-now-in-logic/actions/workflows/ci.yml/badge.svg)](https://github.com/moznion/no-date-now-in-logic/actions/workflows/ci.yml)
+[![CI](https://github.com/moznion/eslint-plugin-injected-time/actions/workflows/ci.yml/badge.svg)](https://github.com/moznion/eslint-plugin-injected-time/actions/workflows/ci.yml)
 
 A lint plugin that forces the time to be injected from the outside and forbids reading the current time ambiently via `Date.now()`. It provides the `no-ambient-date-now` rule. The same implementation runs on **both ESLint and oxlint**.
 

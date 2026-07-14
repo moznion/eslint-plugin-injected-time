@@ -24,7 +24,7 @@
     "prelint:eslint": "pnpm run build",
     "lint:eslint": "eslint examples",
     "prelint:oxlint": "pnpm run build",
-    "lint:oxlint": "oxlint examples",
+    "lint:oxlint": "oxlint --format=unix examples",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
   },

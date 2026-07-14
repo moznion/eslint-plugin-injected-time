@@ -19,7 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
+        # pnpm@11.13.0 (pinned via packageManager) requires `node:sqlite`, which is only
+        # available on Node 22.5+, so Node 20 cannot even bootstrap pnpm.
+        node-version: [22, 24]
 
     steps:
       - name: Checkout
@@ -76,8 +78,10 @@ jobs:
           out="$(pnpm run --silent lint:oxlint 2>&1)"
           code=$?
           echo "$out"
-          # Count only oxlint's violation lines (`... error injected-time(no-ambient-date-now): ...`).
-          count="$(printf '%s\n' "$out" | grep -c 'error injected-time(no-ambient-date-now)')"
+          # `lint:oxlint` pins `--format=unix` so the output is deterministic regardless of
+          # environment (oxlint otherwise auto-switches to the `github` reporter under Actions,
+          # which omits this rule-id token). Each violation line ends with `[Error/injected-time(no-ambient-date-now)]`.
+          count="$(printf '%s\n' "$out" | grep -c 'injected-time(no-ambient-date-now)')"
           if [ "$code" -eq 0 ]; then
             echo "::error::oxlint exited 0; expected violations"; exit 1
           fi
