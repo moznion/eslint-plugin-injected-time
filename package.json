@@ -1,0 +1,41 @@
+{
+  "name": "@moznion/eslint-plugin-injected-time",
+  "version": "0.0.1",
+  "description": "An ESLint and oxlint plugin that forbids ambient Date.now() in your logic and pushes you to inject the current time as a parameter, for deterministic and testable code.",
+  "keywords": [
+    "date-now",
+    "eslint",
+    "eslintplugin",
+    "oxlint",
+    "testability"
+  ],
+  "license": "MIT",
+  "author": "moznion",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prelint:eslint": "pnpm run build",
+    "lint:eslint": "eslint examples",
+    "prelint:oxlint": "pnpm run build",
+    "lint:oxlint": "oxlint examples",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
+  },
+  "devDependencies": {
+    "@typescript-eslint/utils": "8.63.0",
+    "eslint": "10.7.0",
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0",
+    "vitest": "4.1.10"
+  },
+  "packageManager": "pnpm@11.13.0"
+}

@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel stale runs on the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Resolve the pnpm version from the packageManager field in package.json.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (strict TypeScript -> dist)
+        run: pnpm run build
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Format check
+        run: pnpm run fmt:check
+
+      - name: Unit tests (vitest + RuleTester, JS & TS)
+        run: pnpm test
+
+      # Dogfood the rule itself: run both linters against examples and confirm the
+      # plugin loads in the real runtime and reports the expected violations. Rather
+      # than a bare "non-zero exit", verify that exactly the expected number of
+      # rule-id lines are emitted (guarding against a false pass on a load failure).
+      - name: Self-lint with ESLint (expect 5 violations)
+        run: |
+          set +e
+          out="$(pnpm run --silent lint:eslint 2>&1)"
+          code=$?
+          echo "$out"
+          # Count only the rule-id column (match with the namespace to avoid miscounting paths, etc.).
+          count="$(printf '%s\n' "$out" | grep -c 'injected-time/no-ambient-date-now')"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::ESLint exited 0; expected violations"; exit 1
+          fi
+          if [ "$count" -ne 5 ]; then
+            echo "::error::ESLint reported $count rule-id lines; expected 5"; exit 1
+          fi
+          echo "OK: ESLint reported $count violations as expected"
+
+      - name: Self-lint with oxlint (expect 5 violations)
+        run: |
+          set +e
+          out="$(pnpm run --silent lint:oxlint 2>&1)"
+          code=$?
+          echo "$out"
+          # Count only oxlint's violation lines (`... error injected-time(no-ambient-date-now): ...`).
+          count="$(printf '%s\n' "$out" | grep -c 'error injected-time(no-ambient-date-now)')"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::oxlint exited 0; expected violations"; exit 1
+          fi
+          if [ "$count" -ne 5 ]; then
+            echo "::error::oxlint reported $count rule-id lines; expected 5"; exit 1
+          fi
+          echo "OK: oxlint reported $count violations as expected"
