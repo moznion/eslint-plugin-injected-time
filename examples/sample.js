@@ -17,3 +17,8 @@ export function isExpiredPure(expiresAt, now) {
 export function stamp(now = Date.now()) {
   return { at: now };
 }
+
+// GOOD: a thunk in a default parameter is an injection point too
+export function stampEach(clock = () => Date.now()) {
+  return { at: clock() };
+}

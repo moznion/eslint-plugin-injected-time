@@ -29,6 +29,9 @@ test("no-ambient-date-now (espree / JavaScript)", () => {
       // A default-parameter injection point is allowed by default.
       "function tick(now = Date.now()) { return now; }",
       "const tick = (now = Date.now()) => now;",
+      // A thunk in a default parameter is an injection point too.
+      "function tick(clock = () => Date.now()) { return clock(); }",
+      "const tick = (clock = () => Date.now()) => clock();",
       // A "Date.now()" string literal or an unrelated `now` is out of scope.
       "const s = 'Date.now()';",
       "foo.now();",
@@ -60,6 +63,22 @@ test("no-ambient-date-now (espree / JavaScript)", () => {
         code: "function tick(now = Date.now() + 1) { return now; }",
         errors: [{ messageId: "ambientDateNow" }],
       },
+      {
+        // Same for a thunk: only a bare `() => Date.now()` is an injection point.
+        code: "function tick(clock = () => Date.now() + 1) { return clock(); }",
+        errors: [{ messageId: "ambientDateNow" }],
+      },
+      {
+        // A statement body can hold arbitrary logic, so it is not allowed.
+        code: "function tick(clock = () => { return Date.now(); }) { return clock(); }",
+        errors: [{ messageId: "ambientDateNow" }],
+      },
+      {
+        // With allowInDefaultParameters:false, a thunk is reported as well.
+        code: "function tick(clock = () => Date.now()) { return clock(); }",
+        options: [{ allowInDefaultParameters: false }],
+        errors: [{ messageId: "ambientDateNow" }],
+      },
     ],
   });
 });
@@ -82,6 +101,8 @@ test("no-ambient-date-now (typescript-eslint / TypeScript)", () => {
       // A typed default-parameter injection point is allowed by default.
       "function tick(now: number = Date.now()): number { return now; }",
       "const tick = (now: number = Date.now()): number => now;",
+      // A typed thunk is an injection point too.
+      "function tick(clock: () => number = () => Date.now()): number { return clock(); }",
     ],
     invalid: [
       {
