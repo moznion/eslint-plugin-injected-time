@@ -11,6 +11,13 @@
   ],
   "license": "MIT",
   "author": "moznion",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moznion/eslint-plugin-injected-time.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
