@@ -1,6 +1,6 @@
 {
   "name": "@moznion/eslint-plugin-injected-time",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "An ESLint and oxlint plugin that forbids ambient Date.now() in your logic and pushes you to inject the current time as a parameter, for deterministic and testable code.",
   "keywords": [
     "date-now",
