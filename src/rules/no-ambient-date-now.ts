@@ -21,8 +21,9 @@ export type Options = [
   {
     /**
      * Whether to allow `Date.now()` as the default value of a function parameter.
-     * Placing it at an "injection point" like `function f(now = Date.now())` is in
-     * line with this policy, so it is allowed by default.
+     * Placing it at an "injection point" like `function f(now = Date.now())` or
+     * `function f(clock = () => Date.now())` is in line with this policy, so it is
+     * allowed by default.
      */
     readonly allowInDefaultParameters?: boolean;
   }?,
@@ -69,6 +70,35 @@ function isDateNowCall(node: TSESTree.Node | null | undefined): node is TSESTree
   return false;
 }
 
+/**
+ * Extracts the `Date.now()` call that a default parameter value offers as an
+ * injection point, or `null` if the value is not one.
+ *
+ * Two shapes qualify:
+ *   - `f(now = Date.now())`       the time itself
+ *   - `f(now = () => Date.now())` a thunk that reads the time on each call
+ *
+ * A concise-body arrow is required for the latter: a statement body (or anything
+ * else, such as `Date.now() + 1`) is logic rather than a bare injection point.
+ */
+function findInjectedDateNow(
+  node: TSESTree.Node | null | undefined,
+): TSESTree.CallExpression | null {
+  if (isDateNowCall(node)) {
+    return node;
+  }
+
+  if (
+    node?.type === "ArrowFunctionExpression" &&
+    node.body.type !== "BlockStatement" &&
+    isDateNowCall(node.body)
+  ) {
+    return node.body;
+  }
+
+  return null;
+}
+
 export const noAmbientDateNow: TSESLint.RuleModule<MessageIds, Options> = {
   defaultOptions: [{ allowInDefaultParameters: true }],
   meta: {
@@ -105,17 +135,22 @@ export const noAmbientDateNow: TSESLint.RuleModule<MessageIds, Options> = {
     const allowedNodes = new WeakSet<TSESTree.CallExpression>();
 
     /**
-     * When visiting a function node, record any `Date.now()` placed as a parameter's
+     * When visiting a function node, record any `Date.now()` offered by a parameter's
      * default value as allowed. Because a parent is visited before its children, this
-     * set is guaranteed to be populated by the time the CallExpression is visited.
+     * set is guaranteed to be populated by the time the CallExpression is visited —
+     * including the one nested inside a `() => Date.now()` thunk.
      */
     function collectAllowedDefaults(node: FunctionNode): void {
       if (!allowInDefaultParameters) {
         return;
       }
       for (const param of node.params) {
-        if (param.type === "AssignmentPattern" && isDateNowCall(param.right)) {
-          allowedNodes.add(param.right);
+        if (param.type !== "AssignmentPattern") {
+          continue;
+        }
+        const injected = findInjectedDateNow(param.right);
+        if (injected !== null) {
+          allowedNodes.add(injected);
         }
       }
     }
