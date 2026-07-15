@@ -20,9 +20,10 @@ import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 export type Options = [
   {
     /**
-     * Whether to allow `Date.now()` as the default value of a function parameter.
-     * Placing it at an "injection point" like `function f(now = Date.now())` or
-     * `function f(clock = () => Date.now())` is in line with this policy, so it is
+     * Whether to allow `Date.now()` as the default value of a function parameter,
+     * including one nested in a destructuring pattern. Placing it at an "injection
+     * point" like `function f(now = Date.now())`, `function f(clock = () => Date.now())`
+     * or `function f({ clock = () => Date.now() })` is in line with this policy, so it is
      * allowed by default.
      */
     readonly allowInDefaultParameters?: boolean;
@@ -71,8 +72,8 @@ function isDateNowCall(node: TSESTree.Node | null | undefined): node is TSESTree
 }
 
 /**
- * Extracts the `Date.now()` call that a default parameter value offers as an
- * injection point, or `null` if the value is not one.
+ * Extracts the `Date.now()` call that a default value offers as an injection point,
+ * or `null` if the value is not one.
  *
  * Two shapes qualify:
  *   - `f(now = Date.now())`       the time itself
@@ -135,23 +136,67 @@ export const noAmbientDateNow: TSESLint.RuleModule<MessageIds, Options> = {
     const allowedNodes = new WeakSet<TSESTree.CallExpression>();
 
     /**
-     * When visiting a function node, record any `Date.now()` offered by a parameter's
-     * default value as allowed. Because a parent is visited before its children, this
-     * set is guaranteed to be populated by the time the CallExpression is visited —
-     * including the one nested inside a `() => Date.now()` thunk.
+     * Walks a parameter's binding pattern and records every `Date.now()` offered by a
+     * default value as allowed.
+     *
+     * Recursion is what lets a default nested inside a destructuring pattern count as an
+     * injection point, which is the idiomatic shape for an options object:
+     *
+     *   f({ shopId, getNow = () => Date.now() })   an object pattern property
+     *   f([now = Date.now()])                      an array pattern element
+     *   f({ getNow = () => Date.now() } = {})      a pattern that is itself defaulted
+     *
+     * Only the binding pattern is walked, never a default *value* other than through
+     * `findInjectedDateNow`, so `f({ a = compute(Date.now()) })` stays reported.
      */
-    function collectAllowedDefaults(node: FunctionNode): void {
+    function collectAllowedDefaults(pattern: TSESTree.Node | null | undefined): void {
+      switch (pattern?.type) {
+        case "AssignmentPattern": {
+          const injected = findInjectedDateNow(pattern.right);
+          if (injected !== null) {
+            allowedNodes.add(injected);
+          }
+          // `{ getNow = () => Date.now() } = {}` nests the pattern on the left.
+          collectAllowedDefaults(pattern.left);
+          break;
+        }
+        case "ObjectPattern":
+          for (const property of pattern.properties) {
+            collectAllowedDefaults(
+              property.type === "RestElement" ? property.argument : property.value,
+            );
+          }
+          break;
+        case "ArrayPattern":
+          for (const element of pattern.elements) {
+            // A hole (`[, a = Date.now()]`) yields a null element.
+            collectAllowedDefaults(element);
+          }
+          break;
+        case "RestElement":
+          collectAllowedDefaults(pattern.argument);
+          break;
+        case "TSParameterProperty":
+          // `constructor(private readonly now = Date.now())`
+          collectAllowedDefaults(pattern.parameter);
+          break;
+        default:
+          break;
+      }
+    }
+
+    /**
+     * When visiting a function node, record the `Date.now()` calls its parameters offer
+     * as injection points. Because a parent is visited before its children, this set is
+     * guaranteed to be populated by the time the CallExpression is visited — including
+     * the one nested inside a `() => Date.now()` thunk.
+     */
+    function collectAllowedParams(node: FunctionNode): void {
       if (!allowInDefaultParameters) {
         return;
       }
       for (const param of node.params) {
-        if (param.type !== "AssignmentPattern") {
-          continue;
-        }
-        const injected = findInjectedDateNow(param.right);
-        if (injected !== null) {
-          allowedNodes.add(injected);
-        }
+        collectAllowedDefaults(param);
       }
     }
 
@@ -165,9 +210,9 @@ export const noAmbientDateNow: TSESLint.RuleModule<MessageIds, Options> = {
     return {
       // esquery selectors (e.g. `:function`) may be unsupported by oxlint, so register
       // the three kinds of function nodes explicitly.
-      FunctionDeclaration: collectAllowedDefaults,
-      FunctionExpression: collectAllowedDefaults,
-      ArrowFunctionExpression: collectAllowedDefaults,
+      FunctionDeclaration: collectAllowedParams,
+      FunctionExpression: collectAllowedParams,
+      ArrowFunctionExpression: collectAllowedParams,
       CallExpression: checkCallExpression,
     };
   },

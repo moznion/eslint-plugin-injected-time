@@ -25,7 +25,7 @@ function isExpired(exp, now) {
 - `Date.now()`
 - `Date["now"]()`
 
-A default-parameter injection point like `function f(now = Date.now())` — or a thunk, `function f(clock = () => Date.now())` — is allowed by default (`allowInDefaultParameters`, default `true`). Set it to `false` to forbid those too.
+A default-parameter injection point like `function f(now = Date.now())` — or a thunk, `function f(clock = () => Date.now())`, or a destructured default, `function f({ clock = () => Date.now() })` — is allowed by default (`allowInDefaultParameters`, default `true`). Set it to `false` to forbid those too.
 
 ## Install
 
@@ -81,13 +81,23 @@ const injectedTime = require("@moznion/eslint-plugin-injected-time");
 "injected-time/no-ambient-date-now": ["error", { "allowInDefaultParameters": false }]
 ```
 
-Only those two bare shapes are exempt. Once the default value does any work of its own, it is logic rather than an injection point and stays reported:
+A default nested in a destructuring pattern counts too, which is the idiomatic shape for an options object:
+
+```js
+function f({ clock = () => Date.now() }) {} // GOOD
+function f({ opts: { clock = () => Date.now() } }) {} // GOOD (nested)
+function f({ clock = () => Date.now() } = {}) {} // GOOD (the pattern is itself defaulted)
+function f([now = Date.now()]) {} // GOOD (an array pattern)
+```
+
+Only those bare shapes are exempt. Once the default value does any work of its own, it is logic rather than an injection point and stays reported:
 
 ```js
 function f(now = Date.now()) {} // GOOD
 function f(clock = () => Date.now()) {} // GOOD
 function f(now = Date.now() + 1) {} // BAD
 function f(clock = () => Date.now() + 1) {} // BAD
+function f({ now = compute(Date.now()) }) {} // BAD (destructured, but still logic)
 function f(
   clock = () => {
     return Date.now();
@@ -107,6 +117,7 @@ const t: number = Date.now(); // BAD
 const t = Date.now() as number; // BAD (detected even when wrapped in a cast)
 function stamp(now: number = Date.now()) {} // GOOD (a typed default parameter is an injection point)
 function stamp(clock: () => number = () => Date.now()) {} // GOOD (so is a typed thunk)
+const useX = ({ shopId, getNow = () => Date.now() }: Props) => {}; // GOOD (so is a typed destructured default)
 ```
 
 ## Development
@@ -128,4 +139,4 @@ The types reference `@typescript-eslint/utils` **via `import type` only**, so th
 
 ## Implementation notes
 
-It does not use engine-specific APIs such as `node.parent`; it relies only on the traversal-order guarantee that a parent is visited before its children. On visiting a function node it records the `Date.now()` that each default parameter offers — either directly or nested inside a `() => Date.now()` thunk — into a `WeakSet`, and checks against it when visiting a `CallExpression`, achieving identical behavior on both ESLint and oxlint.
+It does not use engine-specific APIs such as `node.parent`; it relies only on the traversal-order guarantee that a parent is visited before its children. On visiting a function node it walks each parameter's binding pattern and records the `Date.now()` that every default offers — directly, nested inside a `() => Date.now()` thunk, or nested in a destructuring pattern — into a `WeakSet`, and checks against it when visiting a `CallExpression`, achieving identical behavior on both ESLint and oxlint.

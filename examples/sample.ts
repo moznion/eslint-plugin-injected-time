@@ -26,3 +26,13 @@ export function stamp(now: number = Date.now()): { at: number } {
 export function stampEach(clock: () => number = () => Date.now()): { at: number } {
   return { at: clock() };
 }
+
+type Props = {
+  readonly shopId: string;
+  readonly getNow?: () => number;
+};
+
+// GOOD: a default nested in a destructuring pattern is an injection point as well
+export const useShopTime = ({ shopId, getNow = () => Date.now() }: Props): string => {
+  return `${shopId}:${getNow()}`;
+};

@@ -32,6 +32,13 @@ test("no-ambient-date-now (espree / JavaScript)", () => {
       // A thunk in a default parameter is an injection point too.
       "function tick(clock = () => Date.now()) { return clock(); }",
       "const tick = (clock = () => Date.now()) => clock();",
+      // A default nested in a destructuring pattern is an injection point as well.
+      "function tick({ now = Date.now() }) { return now; }",
+      "const useX = ({ shopId, getNow = () => Date.now() }) => getNow();",
+      // ...including an array pattern, a defaulted pattern, and nesting of the two.
+      "function tick([now = Date.now()]) { return now; }",
+      "const useX = ({ getNow = () => Date.now() } = {}) => getNow();",
+      "const useX = ({ opts: { getNow = () => Date.now() } }) => getNow();",
       // A "Date.now()" string literal or an unrelated `now` is out of scope.
       "const s = 'Date.now()';",
       "foo.now();",
@@ -79,6 +86,22 @@ test("no-ambient-date-now (espree / JavaScript)", () => {
         options: [{ allowInDefaultParameters: false }],
         errors: [{ messageId: "ambientDateNow" }],
       },
+      {
+        // A destructured default is still only an injection point when it is bare.
+        code: "const useX = ({ getNow = () => Date.now() + 1 }) => getNow();",
+        errors: [{ messageId: "ambientDateNow" }],
+      },
+      {
+        // The destructured binding is a pattern, not a value: this is ambient logic.
+        code: "const useX = ({ now = compute(Date.now()) }) => now;",
+        errors: [{ messageId: "ambientDateNow" }],
+      },
+      {
+        // allowInDefaultParameters:false covers destructured defaults too.
+        code: "const useX = ({ getNow = () => Date.now() }) => getNow();",
+        options: [{ allowInDefaultParameters: false }],
+        errors: [{ messageId: "ambientDateNow" }],
+      },
     ],
   });
 });
@@ -103,6 +126,10 @@ test("no-ambient-date-now (typescript-eslint / TypeScript)", () => {
       "const tick = (now: number = Date.now()): number => now;",
       // A typed thunk is an injection point too.
       "function tick(clock: () => number = () => Date.now()): number { return clock(); }",
+      // A default inside a typed destructuring pattern is an injection point as well.
+      "type Props = { shopId: string; getNow?: () => number };\nexport const useX = ({ shopId, getNow = () => Date.now() }: Props) => getNow();",
+      // A constructor parameter property.
+      "class C { constructor(private readonly now: number = Date.now()) {} }",
     ],
     invalid: [
       {
